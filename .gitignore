@@ -2,6 +2,7 @@
 **/node_modules
 *.rdp
 *.sqlite3
+*.enc
 *.xlsx
 
 # Byte-compiled / optimized / DLL files
