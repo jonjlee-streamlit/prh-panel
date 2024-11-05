@@ -1,4 +1,4 @@
-import os, logging
+import os, io, logging
 import sqlite3
 import boto3
 import streamlit as st
@@ -69,9 +69,8 @@ def connect_s3(
 
         # Write the decrypted database to an in-memory SQLite database
         logging.info("Reading DB to memory")
-        conn = sqlite3.connect(":memory:")
-        conn.deserialize(decrypted_db)
-
+        open("tmp.sqlite3", "wb").write(decrypted_db)
+        conn = sqlite3.connect("tmp.sqlite3")
         return engine_from_conn(conn)
 
     except (NoCredentialsError, PartialCredentialsError) as e:
