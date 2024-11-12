@@ -12,6 +12,7 @@ openpyxl = "*"
 cryptography = "*"
 boto3 = "*"
 python-dotenv = "*"
+pyodbc = "*"
 
 [dev-packages]
 black = "*"

@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from sqlmodel import Session
 from dotenv import load_dotenv
 from sqlmodel import SQLModel
-from prw_ingest import prw_model as prw
-from panel_ingest import panel_model as panel
-from panel_ingest import util
+from model import panel_model
+from util import util
 
 
 # -------------------------------------------------------
@@ -47,8 +46,8 @@ def read_source_tables(engine) -> SrcData:
     """
     logging.info("Reading source tables")
     with Session(engine) as session:
-        patients_df = pd.read_sql_table(prw.PrwPatient.__tablename__, session.bind)
-        encounters_df = pd.read_sql_table(prw.PrwEncounter.__tablename__, session.bind)
+        patients_df = pd.read_sql_table("prw_patients", session.bind)
+        encounters_df = pd.read_sql_table("prw_encounters", session.bind)
 
     return SrcData(patients_df=patients_df, encounters_df=encounters_df)
 
@@ -114,17 +113,6 @@ def transform(src: SrcData) -> OutData:
     patients_df = src.patients_df.copy()
 
     # age (floor of age in years) and age_in_mo (if < 2 years old)
-    now = pd.Timestamp.now()
-    patients_df["age"] = patients_df["dob"].apply(
-        lambda dob: relativedelta(now, dob).years
-    )
-    patients_df["age_in_mo"] = patients_df["dob"].apply(
-        lambda dob: (
-            relativedelta(now, dob).years * 12 + relativedelta(now, dob).months
-            if relativedelta(now, dob).years < 2
-            else None
-        )
-    )
     patients_df["age_display"] = patients_df.apply(
         lambda row: f"{int(row['age_in_mo'])}m" if row["age"] < 2 else str(row["age"]),
         axis=1,
@@ -137,10 +125,10 @@ def transform(src: SrcData) -> OutData:
 
     # For now, we're just going to assign the panel location based on the provider of the first encounter in the list
     first_encounters = (
-        src.encounters_df.groupby("mrn")["service_provider"].first().reset_index()
+        src.encounters_df.groupby("prw_id")["service_provider"].first().reset_index()
     )
     patients_df = patients_df.merge(
-        first_encounters, on="mrn", how="left", suffixes=("", "_first")
+        first_encounters, on="prw_id", how="left", suffixes=("", "_first")
     )
     patients_df["panel_location"] = (
         patients_df["service_provider"]
@@ -156,15 +144,10 @@ def transform(src: SrcData) -> OutData:
     # Delete unused columns: dob, name, address, zip, phone, email
     patients_df.drop(
         columns=[
+            "id",
             "service_provider",
-            "dob",
-            "name",
-            "address",
             "city",
             "state",
-            "zip",
-            "phone",
-            "email",
         ],
         inplace=True,
     )
@@ -223,7 +206,7 @@ def parse_arguments():
     parser.add_argument(
         "-i",
         "--input",
-        help="Connnection string to warehouse database, including credentials",
+        help='Connnection string to warehouse database, including credentials. Look for Azure SQL connection string in Settings > Connection strings, eg. "mssql+pyodbc:///?odbc_connect=Driver={ODBC Driver 18 for SQL Server};Server=tcp:{your server name},1433;Database={your db name};Uid={your user};Pwd={your password};Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"',
         default=PRW_DB_ODBC,
     )
     parser.add_argument(
@@ -270,13 +253,13 @@ def main():
     util.write_tables_to_db(
         out_engine,
         [
-            util.TableData(table=panel.Patient, df=out.patients_df),
-            util.TableData(table=panel.Encounter, df=out.encounters_df),
+            util.TableData(table=panel_model.Patient, df=out.patients_df),
+            util.TableData(table=panel_model.Encounter, df=out.encounters_df),
         ],
     )
 
     # Update last ingest time and modified times for source data files
-    util.write_meta(out_engine, panel.Meta)
+    util.write_meta(out_engine, panel_model.Meta)
 
     # Cleanup
     in_engine.dispose()

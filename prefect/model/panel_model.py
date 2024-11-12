@@ -13,10 +13,9 @@ class Patient(SQLModel, table=True):
     __tablename__ = "patients"
 
     prw_id: Optional[int] = Field(default=None, primary_key=True)
-    mrn: int = Field(unique=True)
     sex: str = Field(regex="^[MFO]$")
     age: Optional[int] = Field(ge=0)
-    age_in_mo: Optional[int] = Field(ge=0)
+    age_mo: Optional[int] = Field(ge=0)
     age_display: Optional[str] = None
     location: Optional[str] = None
     pcp: Optional[str] = None
@@ -30,7 +29,7 @@ class Encounter(SQLModel, table=True):
     __tablename__ = "encounters"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    mrn: int = Field(foreign_key="patients.mrn")
+    prw_id: int = Field(foreign_key="patients.prw_id")
     location: str
     encounter_date: date
     encounter_type: str
